@@ -1,21 +1,31 @@
 package com.example.ikebusia.myapplication;
 
-import android.os.SystemClock;
+import android.app.Activity;
+import android.content.DialogInterface;
+import android.os.Handler;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
-import android.util.Pair;
+import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.GridView;
-import android.widget.Toast;
 
-import java.util.List;
+
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.util.ArrayDeque;
+import java.util.Map;
+
 
 public class MainActivity extends AppCompatActivity {
 
-    private int prevTouch = -1;
+    private int firstTouch = -1;
     private int currTouch = -1;
+    private int lastTouch = -1;
+
+    private ArrayDeque<Integer> touchList = new ArrayDeque<>();
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -32,44 +42,150 @@ public class MainActivity extends AppCompatActivity {
                 switch (motionEvent.getAction())
                 {
                     case MotionEvent.ACTION_DOWN:
-                        if (gridview.pointToPosition((int)motionEvent.getX(), (int)motionEvent.getY()) != -1)
+                        Log.v("MainActivity", "Action down, position: " + getCurrentPosition(motionEvent, gridview));
+                        if (isTouchInsideBoard(motionEvent, gridview))
                         {
-                            prevTouch = gridview.pointToPosition((int)motionEvent.getX(), (int)motionEvent.getY());
+                            firstTouch = getCurrentPosition(motionEvent, gridview);
+                            touchList.addFirst(firstTouch);
+                            currTouch = firstTouch;
                         }
-                        Toast.makeText(MainActivity.this, "row: " + prevTouch / 8 + " col: " + prevTouch % 8, Toast.LENGTH_SHORT).show();
+                        //Toast.makeText(MainActivity.this, "row: " + firstTouch / 8 + " col: " + firstTouch % 8, Toast.LENGTH_SHORT).show();
+                        break;
+                    case MotionEvent.ACTION_MOVE:
+                        if (isTouchInsideBoard(motionEvent, gridview) && hasFirstTouchValid())
+                        {
+                            currTouch = getCurrentPosition(motionEvent, gridview);
+                            if(currTouch != touchList.getLast() && boardManager.arePointsVerticallyOrHorizontallyAligned(currTouch, touchList.getLast()))
+                            {
+                                if(boardManager.isImageTheSame(currTouch, firstTouch))
+                                {
+                                    touchList.addLast(currTouch);
+                                    Log.v("Main Activity", "Adding to list " + currTouch );
+                                }
+                                else
+                                {
+                                    clearSelection();
+                                }
+                            }
+                            Log.v("MainActivity", "Action Move, position: " + getCurrentPosition(motionEvent, gridview));
+                        }
                         break;
                     case MotionEvent.ACTION_UP:
-                        if (gridview.pointToPosition((int)motionEvent.getX(), (int)motionEvent.getY()) != -1)
+                       // Log.v("MainActivity", "Action up, position: " + gridview.pointToPosition((int)motionEvent.getX(), (int)motionEvent.getY()));
+                        if (isTouchInsideBoard(motionEvent, gridview) && touchList.size() > 1 && hasFirstTouchValid())
                         {
-                            currTouch = gridview.pointToPosition((int)motionEvent.getX(), (int)motionEvent.getY());
-                            if (boardManager.CanRemoveFields(prevTouch, currTouch))
-                            {
-                                boardManager.RemoveFields(prevTouch, currTouch);
+                            lastTouch = getCurrentPosition(motionEvent, gridview);
+                            if(lastTouch == touchList.getLast()) {
+                                Log.v("Main Activity", "Last touch " + lastTouch);
+
+                                boardManager.removeAndRefillFields(touchList);
                                 gridview.invalidateViews();
-                                SystemClock.sleep(1000);
-                                boardManager.RefillBlanks(prevTouch, currTouch);
-                                Toast.makeText(MainActivity.this, "row: " + currTouch / 8 + " col: " + currTouch % 8, Toast.LENGTH_SHORT).show();
-                                prevTouch = -1;
-                                currTouch = -1;
+
+                                if (boardManager.isFinished()){
+                                    finishGame(view);
+                                }
+                                clearSelection();
                             }
+                        } else {
+                            clearSelection();
                         }
                         break;
                     default:
+                        clearSelection();
                         break;
                 }
 
                 return true;
             }
         });
+    }
 
-/*        gridview.setOnItemClickListener(new AdapterView.OnItemClickListener() {
-            public void onItemClick(AdapterView<?> parent, View v,
-                                    int position, long id) {
-                Toast.makeText(MainActivity.this, "" + position,
-                        Toast.LENGTH_SHORT).show();
-                boardManager.RemoveFields(position, position + 1);
-                gridview.invalidateViews();
+    private void finishGame(View view) {
+
+        final View currentView = view;
+        final Handler handler = new Handler();
+        handler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+
+                AlertDialog.Builder dlgAlert  = new AlertDialog.Builder(currentView.getContext());
+                dlgAlert.setMessage("Congratulations! You have completed the Memory Quest! ");
+                dlgAlert.setTitle("Great Job!");
+                dlgAlert.setPositiveButton("Ok",
+                        new DialogInterface.OnClickListener() {
+                            public void onClick(DialogInterface dialog, int which) {
+                                //dismiss the dialog
+                                try {
+                                    getActivity().finish();
+                                } catch (ClassNotFoundException e) {
+                                    e.printStackTrace();
+                                } catch (NoSuchMethodException e) {
+                                    e.printStackTrace();
+                                } catch (NoSuchFieldException e) {
+                                    e.printStackTrace();
+                                } catch (IllegalAccessException e) {
+                                    e.printStackTrace();
+                                } catch (InvocationTargetException e) {
+                                    e.printStackTrace();
+                                }
+                            }
+                        });
+                dlgAlert.setCancelable(true);
+                dlgAlert.create().show();
+
             }
-        });*/
+        }, 1000);
+    }
+
+    private int getCurrentPosition(MotionEvent motionEvent, GridView gridview) {
+        return gridview.pointToPosition((int)motionEvent.getX(), (int)motionEvent.getY());
+    }
+
+    private boolean hasFirstTouchValid() {
+        return firstTouch != -1;
+    }
+
+    private boolean isTouchInsideBoard(MotionEvent motionEvent, GridView gridview) {
+        return (getCurrentPosition(motionEvent, gridview)) != -1;
+    }
+
+    public static Activity getActivity() throws ClassNotFoundException, NoSuchMethodException, NoSuchFieldException, InvocationTargetException, IllegalAccessException {
+        Class activityThreadClass = Class.forName("android.app.ActivityThread");
+        Object activityThread = activityThreadClass.getMethod("currentActivityThread").invoke(null);
+        Field activitiesField = activityThreadClass.getDeclaredField("mActivities");
+        activitiesField.setAccessible(true);
+
+        Map<Object, Object> activities = (Map<Object, Object>) activitiesField.get(activityThread);
+        if(activities == null)
+            return null;
+
+        for (Object activityRecord : activities.values()) {
+            Class activityRecordClass = activityRecord.getClass();
+            Field pausedField = activityRecordClass.getDeclaredField("paused");
+            pausedField.setAccessible(true);
+            if (!pausedField.getBoolean(activityRecord)) {
+                Field activityField = activityRecordClass.getDeclaredField("activity");
+                activityField.setAccessible(true);
+                Activity activity = (Activity) activityField.get(activityRecord);
+                return activity;
+            }
+        }
+        return null;
+    }
+
+    private void clearSelection(){
+        firstTouch = -1;
+        currTouch = -1;
+        lastTouch = -1;
+        touchList.clear();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+    }
+    @Override
+    protected void onPause() {
+        super.onPause();
     }
 }

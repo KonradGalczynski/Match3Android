@@ -2,19 +2,27 @@ package com.example.ikebusia.myapplication;
 
 import android.util.Pair;
 
+import java.util.ArrayDeque;
+import java.util.LinkedList;
 import java.util.List;
 
 /**
  * Created by Ikebusia on 2016-11-25.
  */
 public interface IBoardManager {
-    int GetLength();
+    int getLength();
 
-    int GetImageAt(int position);
+    int getImageAt(int position);
 
-    void RemoveFields(int startPosition, int endPosition);
+    boolean isColumnTheSame(int position1, int position2);
 
-    boolean CanRemoveFields(int prevTouch, int currTouch);
+    boolean isRowTheSame(int position1, int position2);
 
-    void RefillBlanks(int startPosition, int endPosition);
+    boolean isFinished();
+
+    boolean arePointsVerticallyOrHorizontallyAligned(int currTouch, Integer last);
+
+    boolean isImageTheSame(int currTouch, int firstTouch);
+
+    void removeAndRefillFields(ArrayDeque<Integer> touchList);
 }
